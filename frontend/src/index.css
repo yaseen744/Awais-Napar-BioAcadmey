@@ -1,0 +1,181 @@
+@import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap");
+
+:root {
+  --void: #05060a;
+  --navy-950: #0a1628;
+  --navy-800: #12244a;
+  --navy-600: #1c3b73;
+  --gold-500: #c9992f;
+  --gold-300: #e6c876;
+  --gold-100: #f0d78c;
+  --paper: #f6f3ea;
+  --paper-dim: #ece7d9;
+  --ink: #171512;
+  --ink-soft: #5b5648;
+  --success: #1f8a4c;
+  --danger: #c0392b;
+  --ring: 0 0 0 3px rgba(201, 153, 47, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+.font-display {
+  font-family: "Fraunces", Georgia, serif;
+}
+
+.font-mono {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* subtle paper texture for exam-like surfaces */
+.exam-paper {
+  background-image: radial-gradient(var(--paper-dim) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+/* Admit-card / exam-ticket signature motif: a perforated edge between
+   two sections of a card, like the tear-line on a real roll-number slip. */
+.ticket-notch {
+  position: relative;
+}
+.ticket-notch::before,
+.ticket-notch::after {
+  content: "";
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: var(--paper);
+  border-radius: 999px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.ticket-notch::before {
+  left: -10px;
+}
+.ticket-notch::after {
+  right: -10px;
+}
+.ticket-perforation {
+  border-top: 2px dashed rgba(23, 21, 18, 0.15);
+}
+
+.glass {
+  background: rgba(10, 22, 40, 0.55);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.foil-text {
+  background: linear-gradient(100deg, var(--gold-500) 20%, var(--gold-100) 45%, var(--gold-500) 70%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: foil-sweep 5s ease-in-out infinite;
+}
+
+@keyframes foil-sweep {
+  0% { background-position: 0% center; }
+  50% { background-position: 100% center; }
+  100% { background-position: 0% center; }
+}
+
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
+  animation: shimmer 1.6s infinite;
+}
+
+.input-dark {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.2rem;
+  color: var(--paper);
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+.input-dark::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+.input-dark:focus {
+  outline: none;
+  border-color: var(--gold-500);
+  box-shadow: 0 0 0 3px rgba(201, 153, 47, 0.25);
+}
+
+.input-light {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  background: #ffffff;
+  border: 1.5px solid rgba(23, 21, 18, 0.12);
+  border-radius: 0.55rem;
+  color: var(--ink);
+  font-size: 0.925rem;
+  transition: box-shadow 0.2s, border-color 0.2s, background 0.2s;
+}
+.input-light::placeholder {
+  color: rgba(23, 21, 18, 0.32);
+}
+.input-light:hover {
+  border-color: rgba(23, 21, 18, 0.2);
+}
+.input-light:focus {
+  outline: none;
+  border-color: var(--gold-500);
+  box-shadow: var(--ring);
+  background: #fffdf8;
+}
+
+/* Soft ambient glow used for premium static accents — no mouse tracking */
+.ambient-glow {
+  animation: ambient-pulse 4.5s ease-in-out infinite;
+}
+@keyframes ambient-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+
+a,
+button {
+  outline-color: var(--gold-500);
+}
+*:focus-visible {
+  outline: 2px solid var(--gold-500);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--gold-300);
+  color: var(--navy-950);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
