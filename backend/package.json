@@ -19,8 +19,8 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.5.0",
     "multer": "^2.3.0",
-    "pdf-parse": "^2.4.5",
-    "streamifier": "^0.1.1"
+    "streamifier": "^0.1.1",
+    "unpdf": "^1.8.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"

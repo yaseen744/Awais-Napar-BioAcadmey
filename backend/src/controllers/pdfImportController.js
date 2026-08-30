@@ -1,5 +1,6 @@
 import Question from "../models/Question.js";
 import { parseMCQsFromText } from "../utils/mcqParser.js";
+import { extractTextFromPdfBuffer } from "../utils/pdfText.js";
 
 const SUBJECTS = ["Physics", "Chemistry", "Biology", "English", "Logical Reasoning"];
 
@@ -14,18 +15,7 @@ export async function extractPdf(req, res) {
 
     let rawText = "";
     try {
-      // Loaded here (not at the top of the file) on purpose: pdf-parse pulls
-      // in pdfjs-dist, which tries to optionally load a native "canvas"
-      // package that isn't available in Vercel's serverless environment.
-      // Importing it at the top of the file would crash EVERY route on cold
-      // start; importing it only when this endpoint is actually hit means
-      // the rest of the app (auth, tests, videos, notes...) keeps working
-      // even if this one PDF-import feature can't load.
-      const { PDFParse } = await import("pdf-parse");
-      const parser = new PDFParse({ data: req.file.buffer });
-      const result = await parser.getText();
-      rawText = result.text || "";
-      await parser.destroy();
+      rawText = await extractTextFromPdfBuffer(req.file.buffer);
     } catch (err) {
       return res.status(400).json({
         message: "Could not read this PDF. It may be corrupted or password-protected.",
