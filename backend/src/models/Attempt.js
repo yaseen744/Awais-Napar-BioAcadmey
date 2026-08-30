@@ -12,6 +12,9 @@ const answerSchema = new mongoose.Schema(
 const attemptSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    // Optional: set when this attempt belongs to an admin-configured Test
+    // (as opposed to the older ad-hoc "pick a subject/chapter" quiz flow).
+    test: { type: mongoose.Schema.Types.ObjectId, ref: "Test", default: null },
     subject: { type: String, required: true },
     chapter: { type: String, default: "Mixed" },
     answers: [answerSchema],
@@ -21,6 +24,9 @@ const attemptSchema = new mongoose.Schema(
     unattemptedCount: { type: Number, default: 0 },
     scorePercent: { type: Number, default: 0 },
     timeTakenSeconds: { type: Number, default: 0 },
+    // Set when the attempt was force-ended by the anti-cheating guard
+    // (tab switch / left fullscreen) instead of a normal submit click.
+    terminatedReason: { type: String, default: null },
   },
   { timestamps: true }
 );

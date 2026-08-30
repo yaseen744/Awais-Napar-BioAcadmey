@@ -1,15 +1,56 @@
 import Attempt from "../models/Attempt.js";
 import Question from "../models/Question.js";
+import Test from "../models/Test.js";
 import User from "../models/User.js";
 
 // POST /api/attempts
-// body: { subject, chapter, timeTakenSeconds, answers: [{ questionId, selectedIndex }] }
+// body: { subject, chapter, timeTakenSeconds, answers: [{ questionId, selectedIndex }], testId? }
+// testId is optional -- present when this attempt belongs to an admin-configured Test
+// (as opposed to the older ad-hoc "pick a subject/chapter" quiz flow).
 export async function submitAttempt(req, res) {
   try {
-    const { subject, chapter, timeTakenSeconds, answers } = req.body;
+    const { subject, chapter, timeTakenSeconds, answers, testId, terminatedReason } = req.body;
 
-    if (!subject || !Array.isArray(answers) || answers.length === 0) {
-      return res.status(400).json({ message: "subject and answers[] are required." });
+    if (!Array.isArray(answers) || answers.length === 0) {
+      return res.status(400).json({ message: "answers[] are required." });
+    }
+
+    let test = null;
+    let resolvedSubject = subject;
+    let resolvedChapter = chapter;
+
+    // --- Server-side access control for test-based attempts ---
+    // Never trust the frontend: re-verify the test is published + open, and
+    // that every submitted question actually belongs to this test's pool,
+    // right at submission time (not just when "start" was called).
+    if (testId) {
+      test = await Test.findById(testId);
+      if (!test) {
+        return res.status(404).json({ message: "Test not found." });
+      }
+      if (test.status !== "published") {
+        return res.status(403).json({ message: "This test is not currently available." });
+      }
+      if (!test.isOpen) {
+        return res.status(403).json({ message: "Test is currently closed." });
+      }
+
+      const allowedIds = new Set(
+        (test.selectionMode === "specific" ? test.selectedQuestions : test.questionBank).map((id) =>
+          id.toString()
+        )
+      );
+      const hasForeignQuestion = answers.some((a) => !allowedIds.has(String(a.questionId)));
+      if (hasForeignQuestion) {
+        return res.status(400).json({ message: "Submitted answers do not match this test's questions." });
+      }
+
+      resolvedSubject = test.subject;
+      resolvedChapter = test.chapter;
+    }
+
+    if (!resolvedSubject) {
+      return res.status(400).json({ message: "subject is required." });
     }
 
     const questionIds = answers.map((a) => a.questionId);
@@ -42,8 +83,9 @@ export async function submitAttempt(req, res) {
 
     const attempt = await Attempt.create({
       user: req.user._id,
-      subject,
-      chapter: chapter || "Mixed",
+      test: test ? test._id : null,
+      subject: resolvedSubject,
+      chapter: resolvedChapter || "Mixed",
       answers: gradedAnswers,
       totalQuestions,
       correctCount,
@@ -51,6 +93,7 @@ export async function submitAttempt(req, res) {
       unattemptedCount,
       scorePercent,
       timeTakenSeconds: timeTakenSeconds || 0,
+      terminatedReason: terminatedReason || null,
     });
 
     // Award points: +1 per correct answer, no penalty for wrong/skipped.

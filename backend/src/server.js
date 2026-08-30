@@ -10,6 +10,7 @@ import videoRoutes from "./routes/videoRoutes.js";
 import noteRoutes from "./routes/noteRoutes.js";
 import leaderboardRoutes from "./routes/leaderboardRoutes.js";
 import communityRoutes from "./routes/communityRoutes.js";
+import testRoutes from "./routes/testRoutes.js";
 
 dotenv.config();
 
@@ -32,6 +33,7 @@ app.use("/api/videos", videoRoutes);
 app.use("/api/notes", noteRoutes);
 app.use("/api/leaderboard", leaderboardRoutes);
 app.use("/api/community", communityRoutes);
+app.use("/api/tests", testRoutes);
 
 // 404 handler
 app.use((req, res) => {

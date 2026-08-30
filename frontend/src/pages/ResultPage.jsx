@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import confetti from "canvas-confetti";
-import { CheckCircle2, XCircle, MinusCircle, RotateCcw, LayoutDashboard } from "lucide-react";
+import { CheckCircle2, XCircle, MinusCircle, RotateCcw, LayoutDashboard, ShieldAlert } from "lucide-react";
 import api from "../api/axios";
 import Navbar from "../components/Navbar";
 import CountUp from "../components/CountUp";
@@ -51,6 +51,15 @@ export default function ResultPage() {
 
         {attempt && (
           <>
+            {attempt.terminatedReason && (
+              <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-[var(--danger)] text-sm px-4 py-3 rounded-sm mb-4">
+                <ShieldAlert size={16} className="mt-0.5 shrink-0" />
+                <span>
+                  <b>Attempt ended early:</b> {attempt.terminatedReason} Only the questions you'd
+                  answered before that were submitted.
+                </span>
+              </div>
+            )}
             <motion.div
               initial={{ opacity: 0, scale: 0.94 }}
               animate={{ opacity: 1, scale: 1 }}

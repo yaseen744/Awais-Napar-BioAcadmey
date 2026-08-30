@@ -8,6 +8,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import TestSetup from "./pages/TestSetup";
 import TestPage from "./pages/TestPage";
+import Tests from "./pages/Tests";
 import ResultPage from "./pages/ResultPage";
 import Videos from "./pages/Videos";
 import Notes from "./pages/Notes";
@@ -41,6 +42,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <TestSetup />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tests"
+          element={
+            <ProtectedRoute>
+              <Tests />
             </ProtectedRoute>
           }
         />

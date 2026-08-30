@@ -7,13 +7,16 @@ import {
   PlayCircle,
   FileText,
   Check,
+  ClipboardList,
 } from "lucide-react";
 import api from "../api/axios";
 import Navbar from "../components/Navbar";
+import TestsPanel from "./admin/TestsPanel";
 
 const SUBJECTS = ["Physics", "Chemistry", "Biology", "English", "Logical Reasoning"];
 const TABS = [
   { key: "Approvals", label: "Approvals", icon: UserCheck },
+  { key: "Tests", label: "Tests", icon: ClipboardList },
   { key: "Question", label: "Add Question", icon: HelpCircle },
   { key: "Video", label: "Add Video", icon: PlayCircle },
   { key: "Note", label: "Add Note", icon: FileText },
@@ -26,7 +29,7 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-[var(--paper)]">
       <Navbar />
-      <main className="max-w-2xl mx-auto px-5 py-10">
+      <main className={`mx-auto px-5 py-10 ${tab === "Tests" ? "max-w-4xl" : "max-w-2xl"}`}>
         <div className="bg-[var(--navy-950)] text-[var(--paper)] rounded-md px-6 py-5 flex items-center gap-3 mb-6">
           <span className="w-11 h-11 rounded-full border-[3px] border-double border-[var(--gold-500)] text-[var(--gold-300)] flex items-center justify-center shrink-0">
             <ShieldCheck size={20} />
@@ -62,6 +65,7 @@ export default function Admin() {
         </div>
 
         {tab === "Approvals" && <ApprovalsPanel onCountChange={setPendingCount} />}
+        {tab === "Tests" && <TestsPanel />}
         {tab === "Question" && <QuestionForm />}
         {tab === "Video" && <VideoForm />}
         {tab === "Note" && <NoteForm />}
@@ -160,7 +164,7 @@ function ApprovalsPanel({ onCountChange }) {
   );
 }
 
-function FormShell({ children, onSubmit, saving, message }) {
+function FormShell({ children, onSubmit, saving, message, submitLabel }) {
   return (
     <form onSubmit={onSubmit} className="bg-white border border-black/10 rounded-md p-6 space-y-4">
       {children}
@@ -181,7 +185,7 @@ function FormShell({ children, onSubmit, saving, message }) {
         className="w-full flex items-center justify-center gap-2 bg-[var(--navy-950)] text-[var(--paper)] font-semibold py-2.5 rounded-sm hover:bg-[var(--navy-800)] disabled:opacity-60"
       >
         <Check size={16} strokeWidth={2.5} />
-        {saving ? "Saving..." : "Save"}
+        {saving ? "Saving..." : submitLabel || "Save"}
       </button>
     </form>
   );
@@ -319,33 +323,74 @@ function QuestionForm() {
 }
 
 function VideoForm() {
-  const empty = { subject: "Biology", chapter: "", title: "", videoUrl: "", description: "" };
-  const [form, setForm] = useState(empty);
+  const emptyMeta = { subject: "Biology", chapter: "", title: "", description: "" };
+  const [meta, setMeta] = useState(emptyMeta);
+  const [file, setFile] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [message, setMessage] = useState(null);
+
+  const ACCEPTED_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
+
+  function handleFileChange(e) {
+    const f = e.target.files?.[0] || null;
+    setMessage(null);
+    if (f && !ACCEPTED_TYPES.includes(f.type)) {
+      setMessage({ ok: false, text: "Please choose an MP4, WebM, or MOV video file." });
+      setFile(null);
+      return;
+    }
+    setFile(f);
+  }
+
+  function formatSize(bytes) {
+    if (!bytes) return "";
+    const mb = bytes / (1024 * 1024);
+    return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.round(bytes / 1024)} KB`;
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (!file) {
+      setMessage({ ok: false, text: "Choose a video file to upload." });
+      return;
+    }
     setSaving(true);
+    setProgress(0);
     setMessage(null);
+
+    const formData = new FormData();
+    formData.append("video", file);
+    formData.append("subject", meta.subject);
+    formData.append("chapter", meta.chapter);
+    formData.append("title", meta.title);
+    formData.append("description", meta.description);
+
     try {
-      await api.post("/videos", form);
-      setMessage({ ok: true, text: "Video added." });
-      setForm(empty);
+      await api.post("/videos/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (evt) => {
+          if (evt.total) setProgress(Math.round((evt.loaded / evt.total) * 100));
+        },
+      });
+      setMessage({ ok: true, text: "Video uploaded successfully." });
+      setMeta(emptyMeta);
+      setFile(null);
+      setProgress(0);
     } catch (err) {
-      setMessage({ ok: false, text: err.response?.data?.message || "Failed to add video." });
+      setMessage({ ok: false, text: err.response?.data?.message || "Failed to upload video." });
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <FormShell onSubmit={handleSubmit} saving={saving} message={message}>
+    <FormShell onSubmit={handleSubmit} saving={saving} message={message} submitLabel="Upload video">
       <div className="grid grid-cols-2 gap-3">
         <Field label="Subject">
           <select
-            value={form.subject}
-            onChange={(e) => setForm({ ...form, subject: e.target.value })}
+            value={meta.subject}
+            onChange={(e) => setMeta({ ...meta, subject: e.target.value })}
             className={inputClass}
           >
             {SUBJECTS.map((s) => (
@@ -356,8 +401,8 @@ function VideoForm() {
         <Field label="Chapter">
           <input
             required
-            value={form.chapter}
-            onChange={(e) => setForm({ ...form, chapter: e.target.value })}
+            value={meta.chapter}
+            onChange={(e) => setMeta({ ...meta, chapter: e.target.value })}
             className={inputClass}
             placeholder="e.g. Genetics"
           />
@@ -366,24 +411,44 @@ function VideoForm() {
       <Field label="Title">
         <input
           required
-          value={form.title}
-          onChange={(e) => setForm({ ...form, title: e.target.value })}
+          value={meta.title}
+          onChange={(e) => setMeta({ ...meta, title: e.target.value })}
           className={inputClass}
         />
       </Field>
-      <Field label="Video URL (YouTube/Vimeo link)">
+
+      <Field label="Video file (MP4, WebM, or MOV)">
         <input
-          required
-          value={form.videoUrl}
-          onChange={(e) => setForm({ ...form, videoUrl: e.target.value })}
+          type="file"
+          accept="video/mp4,video/webm,video/quicktime"
+          onChange={handleFileChange}
           className={inputClass}
-          placeholder="https://www.youtube.com/watch?v=..."
         />
+        {file && (
+          <p className="text-xs text-[var(--ink-soft)] mt-1.5">
+            {file.name} · {formatSize(file.size)}
+          </p>
+        )}
       </Field>
+
+      {saving && (
+        <div>
+          <div className="w-full h-2 bg-black/10 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-[var(--gold-500)] transition-all"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <p className="text-xs text-[var(--ink-soft)] mt-1">
+            {progress < 100 ? `Uploading... ${progress}%` : "Processing on cloud storage..."}
+          </p>
+        </div>
+      )}
+
       <Field label="Description (optional)">
         <input
-          value={form.description}
-          onChange={(e) => setForm({ ...form, description: e.target.value })}
+          value={meta.description}
+          onChange={(e) => setMeta({ ...meta, description: e.target.value })}
           className={inputClass}
         />
       </Field>

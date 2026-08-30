@@ -149,10 +149,22 @@ export default function Videos() {
 }
 
 function VideoPlayer({ video }) {
-  const embedUrl = toEmbedUrl(video.videoUrl);
+  const isUpload = video.sourceType === "upload";
+  const embedUrl = !isUpload ? toEmbedUrl(video.videoUrl) : null;
+
   return (
     <div className="bg-white border border-black/10 rounded-md overflow-hidden">
-      {embedUrl ? (
+      {isUpload ? (
+        <div className="aspect-video bg-black">
+          <video
+            key={video._id}
+            src={video.videoUrl}
+            controls
+            className="w-full h-full"
+            preload="metadata"
+          />
+        </div>
+      ) : embedUrl ? (
         <div className="aspect-video">
           <iframe
             src={embedUrl}

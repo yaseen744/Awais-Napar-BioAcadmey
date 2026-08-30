@@ -42,6 +42,24 @@ export async function getMeta(req, res) {
   }
 }
 
+// GET /api/questions/all?subject=Biology&chapter=Biomolecules (admin only)
+// Returns the FULL matching set (not a random sample) -- used by the admin
+// "specific question selection" UI and the question-bank browser.
+export async function getAllQuestions(req, res) {
+  try {
+    const { subject, chapter, source } = req.query;
+    const filter = {};
+    if (subject) filter.subject = subject;
+    if (chapter) filter.chapter = chapter;
+    if (source) filter.pdfSource = source;
+
+    const questions = await Question.find(filter).sort({ createdAt: -1 });
+    return res.json(questions);
+  } catch (err) {
+    return res.status(500).json({ message: "Could not fetch questions.", error: err.message });
+  }
+}
+
 // POST /api/questions (admin only) - add a single question to the bank
 export async function addQuestion(req, res) {
   try {

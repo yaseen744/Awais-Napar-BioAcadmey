@@ -36,6 +36,12 @@ const questionSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    // Filename of the PDF this question was auto-imported from, if any.
+    // Purely informational -- lets the admin see where a question came from.
+    pdfSource: {
+      type: String,
+      default: "",
+    },
   },
   { timestamps: true }
 );
