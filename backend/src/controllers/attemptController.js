@@ -120,12 +120,53 @@ export async function getMyAttempts(req, res) {
   }
 }
 
-// GET /api/attempts/:id - full review of one attempt (with correct answers + explanations)
+// GET /api/attempts (admin only) - recent attempts across ALL students, for the
+// admin dashboard / oversight. Populates the student's name+email and the
+// test title (if it belongs to an admin-configured Test) so the admin can see
+// who took what without an extra click.
+export async function getAllAttempts(req, res) {
+  try {
+    const { limit } = req.query;
+    const count = Math.min(parseInt(limit, 10) || 100, 300);
+
+    const attempts = await Attempt.find({})
+      .sort({ createdAt: -1 })
+      .limit(count)
+      .populate("user", "name email")
+      .populate("test", "title");
+
+    return res.json(attempts);
+  } catch (err) {
+    return res.status(500).json({ message: "Could not fetch attempts.", error: err.message });
+  }
+}
+
+// GET /api/tests/:testId/attempts (admin only) - every attempt made on one
+// specific test, with student name/email, for the Admin Tests panel.
+export async function getAttemptsForTest(req, res) {
+  try {
+    const attempts = await Attempt.find({ test: req.params.testId })
+      .sort({ createdAt: -1 })
+      .populate("user", "name email");
+    return res.json(attempts);
+  } catch (err) {
+    return res.status(500).json({ message: "Could not fetch attempts.", error: err.message });
+  }
+}
+
+// GET /api/attempts/:id - full review of one attempt (with correct answers + explanations).
+// Students can only view their own attempts. Admins can view ANY student's
+// attempt (needed for the "who took this test and how did they do" views).
 export async function getAttemptDetail(req, res) {
   try {
-    const attempt = await Attempt.findOne({ _id: req.params.id, user: req.user._id }).populate(
-      "answers.question"
-    );
+    const filter =
+      req.user.role === "admin" ? { _id: req.params.id } : { _id: req.params.id, user: req.user._id };
+
+    const attempt = await Attempt.findOne(filter)
+      .populate("answers.question")
+      .populate("user", "name email")
+      .populate("test", "title");
+
     if (!attempt) {
       return res.status(404).json({ message: "Attempt not found." });
     }

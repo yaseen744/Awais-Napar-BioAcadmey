@@ -6,9 +6,11 @@ import { CheckCircle2, XCircle, MinusCircle, RotateCcw, LayoutDashboard, ShieldA
 import api from "../api/axios";
 import Navbar from "../components/Navbar";
 import CountUp from "../components/CountUp";
+import { useAuth } from "../context/AuthContext";
 
 export default function ResultPage() {
   const { id } = useParams();
+  const { user } = useAuth();
   const [attempt, setAttempt] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -67,6 +69,9 @@ export default function ResultPage() {
               className="bg-gradient-to-br from-[var(--navy-950)] via-[var(--navy-800)] to-[var(--navy-950)] text-[var(--paper)] rounded-xl p-8 text-center mb-8 border border-[var(--gold-500)]/20 shadow-[0_20px_50px_-20px_rgba(10,22,40,0.5)]"
             >
               <span className="text-xs uppercase tracking-[0.2em] text-[var(--gold-300)]">
+                {user?.role === "admin" && attempt.user?.name
+                  ? `${attempt.user.name} (${attempt.user.email}) — `
+                  : ""}
                 {attempt.subject} · {attempt.chapter}
               </span>
               <p className="font-display text-7xl font-semibold mt-2 foil-text">

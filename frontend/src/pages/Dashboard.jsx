@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ClipboardList, Target, ArrowRight, Sparkles } from "lucide-react";
+import { ClipboardList, Target, ArrowRight, Sparkles, Users } from "lucide-react";
 import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
@@ -9,16 +9,20 @@ import TiltCard from "../components/TiltCard";
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Admins don't take tests themselves -- show recent attempts across ALL
+    // students instead of their own (empty) history.
+    const endpoint = isAdmin ? "/attempts" : "/attempts/me";
     api
-      .get("/attempts/me")
+      .get(endpoint)
       .then(({ data }) => setAttempts(data))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [isAdmin]);
 
   const avgScore = attempts.length
     ? Math.round(attempts.reduce((sum, a) => sum + a.scorePercent, 0) / attempts.length)
@@ -36,22 +40,32 @@ export default function Dashboard() {
           >
             <div className="p-6 sm:p-7 flex-1">
               <p className="text-xs uppercase tracking-[0.2em] text-[var(--gold-300)] mb-1">
-                Candidate Dashboard
+                {isAdmin ? "Instructor Dashboard" : "Candidate Dashboard"}
               </p>
               <h1 className="font-display text-3xl foil-text font-semibold">
                 Welcome, {user?.name?.split(" ")[0]}
               </h1>
               <p className="text-[var(--paper)]/60 text-sm mt-1">
-                Here's where your practice stands.
+                {isAdmin
+                  ? "Here's how your students are doing."
+                  : "Here's where your practice stands."}
               </p>
             </div>
             <div className="ticket-perforation sm:border-t-0 sm:border-l-2 sm:border-dashed sm:border-white/20 bg-white/5 p-6 sm:p-7 flex flex-col justify-center gap-3 sm:w-64">
               <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
                 <Link
-                  to="/test/new"
+                  to={isAdmin ? "/admin" : "/test/new"}
                   className="inline-flex items-center justify-center gap-2 bg-[var(--gold-500)] text-[var(--navy-950)] font-semibold text-sm px-4 py-2.5 rounded-sm hover:bg-[var(--gold-300)] transition-colors w-full shadow-[0_8px_20px_-8px_rgba(201,153,47,0.6)]"
                 >
-                  <Sparkles size={16} /> Start a new test
+                  {isAdmin ? (
+                    <>
+                      <Users size={16} /> Manage tests
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={16} /> Start a new test
+                    </>
+                  )}
                 </Link>
               </motion.div>
             </div>
@@ -59,16 +73,23 @@ export default function Dashboard() {
         </TiltCard>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
-          <StatCard icon={ClipboardList} label="Tests taken" value={attempts.length} delay={0.05} />
+          <StatCard
+            icon={ClipboardList}
+            label={isAdmin ? "Attempts recorded" : "Tests taken"}
+            value={attempts.length}
+            delay={0.05}
+          />
           <StatCard
             icon={Target}
-            label="Average score"
+            label={isAdmin ? "Average student score" : "Average score"}
             value={avgScore !== null ? `${avgScore}%` : "—"}
             delay={0.12}
           />
         </div>
 
-        <h2 className="font-display text-xl text-[var(--navy-950)] mb-3">Recent attempts</h2>
+        <h2 className="font-display text-xl text-[var(--navy-950)] mb-3">
+          {isAdmin ? "Recent attempts (all students)" : "Recent attempts"}
+        </h2>
 
         {loading && (
           <div className="space-y-2">
@@ -81,14 +102,18 @@ export default function Dashboard() {
         {!loading && attempts.length === 0 && (
           <div className="bg-white border border-dashed border-black/15 rounded-md p-8 text-center">
             <p className="text-[var(--ink-soft)]">
-              No attempts yet. Take your first test to see your results here.
+              {isAdmin
+                ? "No student has taken a test yet."
+                : "No attempts yet. Take your first test to see your results here."}
             </p>
-            <Link
-              to="/test/new"
-              className="inline-flex items-center gap-1 mt-4 text-[var(--navy-800)] font-semibold hover:underline"
-            >
-              Start your first test <ArrowRight size={15} />
-            </Link>
+            {!isAdmin && (
+              <Link
+                to="/test/new"
+                className="inline-flex items-center gap-1 mt-4 text-[var(--navy-800)] font-semibold hover:underline"
+              >
+                Start your first test <ArrowRight size={15} />
+              </Link>
+            )}
           </div>
         )}
 
@@ -106,9 +131,12 @@ export default function Dashboard() {
               >
                 <div>
                   <p className="font-semibold text-[var(--navy-950)]">
+                    {isAdmin && a.user ? `${a.user.name} — ` : ""}
                     {a.subject} · {a.chapter}
+                    {a.test?.title ? ` (${a.test.title})` : ""}
                   </p>
                   <p className="text-xs text-[var(--ink-soft)] font-mono mt-0.5">
+                    {isAdmin && a.user?.email ? `${a.user.email} · ` : ""}
                     {a.correctCount}/{a.totalQuestions} correct ·{" "}
                     {new Date(a.createdAt).toLocaleDateString()}
                   </p>

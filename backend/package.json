@@ -8,7 +8,9 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "seed": "node src/seed/seedQuestions.js",
-    "make-admin": "node src/seed/makeAdmin.js"
+    "make-admin": "node src/seed/makeAdmin.js",
+    "list-users": "node src/seed/listUsers.js",
+    "reset-admins": "node src/seed/resetAdmins.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

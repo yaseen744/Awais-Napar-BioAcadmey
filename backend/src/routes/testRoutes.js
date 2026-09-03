@@ -11,6 +11,7 @@ import {
   startTest,
 } from "../controllers/testController.js";
 import { extractPdf } from "../controllers/pdfImportController.js";
+import { getAttemptsForTest } from "../controllers/attemptController.js";
 import { protect, adminOnly } from "../middleware/auth.js";
 import { uploadPdf, handleUploadError } from "../middleware/upload.js";
 
@@ -29,6 +30,7 @@ router.post(
 
 router.get("/", listTests);
 router.get("/:id", getTest);
+router.get("/:id/attempts", adminOnly, getAttemptsForTest);
 router.post("/", adminOnly, createTest);
 router.patch("/:id", adminOnly, updateTest);
 router.delete("/:id", adminOnly, deleteTest);

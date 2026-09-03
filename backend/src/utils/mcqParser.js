@@ -14,11 +14,15 @@
 // option styles like "A.", "A)", "(A)", "A:".
 // Answer line accepts "Correct Answer:", "Answer:", "Ans:", "Correct Option:"
 // followed by a letter (A-E) or the full option text.
+//
+// Also tolerates PDFs where two (or more) options land on the SAME extracted
+// text line -- common with 2-column/table-style question papers, e.g.
+// "A. Nucleus     B. Mitochondria" on one physical line. The old version only
+// looked for ONE option marker per line, so the second option's text got
+// swallowed into the first option's text instead of becoming its own option.
 
 const QUESTION_START_RE =
   /(?:^|\n)\s*(?:Q(?:uestion)?\.?\s*)?(\d{1,3})[.).:]\s+/gi;
-
-const OPTION_RE = /(?:^|\n)\s*\(?([A-Ea-e])[.).:]\s+(.+)/g;
 
 const ANSWER_RE =
   /(?:Correct\s*Answer|Correct\s*Option|Answer|Ans)\s*[:.\-]?\s*\(?([A-Ea-e])?\)?\s*(.*)/i;
@@ -45,8 +49,32 @@ function splitIntoQuestionBlocks(text) {
 }
 
 /**
+ * Finds EVERY "A. text" / "B) text" / "(C): text" marker in a single line and
+ * splits the line's content between consecutive markers, instead of grabbing
+ * everything after the first marker. This is what correctly separates two
+ * options that ended up on the same physical PDF line.
+ * Returns [] if the line has no option markers at all.
+ */
+function extractOptionsFromLine(line) {
+  const markerRe = /\(?([A-Ea-e])[.).:]\s+/g;
+  const markers = [...line.matchAll(markerRe)];
+  if (markers.length === 0) return [];
+
+  const results = [];
+  for (let i = 0; i < markers.length; i++) {
+    const contentStart = markers[i].index + markers[i][0].length;
+    const contentEnd = i + 1 < markers.length ? markers[i + 1].index : line.length;
+    const text = line.slice(contentStart, contentEnd).trim();
+    if (text) {
+      results.push({ letter: markers[i][1].toUpperCase(), text });
+    }
+  }
+  return results;
+}
+
+/**
  * Parses a single question block into a structured question, or null if it
- * doesn't look like a valid MCQ (missing options / answer).
+ * doesn't look like a valid MCQ (no options detected at all).
  */
 function parseBlock(block, index) {
   const lines = block.raw.split("\n").map((l) => l.trim());
@@ -63,7 +91,6 @@ function parseBlock(block, index) {
   for (const line of lines) {
     if (!line) continue;
 
-    const optMatch = /^\(?([A-Ea-e])[.).:]\s+(.+)/.exec(line);
     const ansMatch = ANSWER_RE.exec(line);
     const explMatch = EXPLANATION_RE.exec(line);
 
@@ -75,16 +102,30 @@ function parseBlock(block, index) {
       explanationLine = explMatch[1];
       continue;
     }
-    if (optMatch) {
-      optionLines.push({ letter: optMatch[1].toUpperCase(), text: optMatch[2].trim() });
+
+    const lineOptions = extractOptionsFromLine(line);
+    if (lineOptions.length > 0) {
+      optionLines.push(...lineOptions);
       continue;
     }
+
     bodyLines.push(line);
   }
 
   const questionText = bodyLines.join(" ").trim();
-  const options = optionLines.map((o) => o.text);
-  const optionLetters = optionLines.map((o) => o.letter);
+
+  // De-duplicate by letter, keeping the first occurrence, in case the same
+  // marker gets matched twice (e.g. a stray repeated header line).
+  const seenLetters = new Set();
+  const dedupedOptions = [];
+  for (const o of optionLines) {
+    if (seenLetters.has(o.letter)) continue;
+    seenLetters.add(o.letter);
+    dedupedOptions.push(o);
+  }
+
+  const options = dedupedOptions.map((o) => o.text);
+  const optionLetters = dedupedOptions.map((o) => o.letter);
 
   if (!questionText || options.length < 2) {
     return null; // not a usable MCQ
@@ -126,3 +167,4 @@ export function parseMCQsFromText(text) {
   });
   return parsed;
 }
+

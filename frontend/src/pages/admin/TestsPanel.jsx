@@ -15,6 +15,8 @@ import {
   X,
   Eye,
   EyeOff,
+  Users,
+  ArrowLeft,
 } from "lucide-react";
 import api from "../../api/axios";
 
@@ -49,9 +51,10 @@ function Banner({ ok, children }) {
 }
 
 export default function TestsPanel() {
-  const [view, setView] = useState("list"); // list | import | create
+  const [view, setView] = useState("list"); // list | import | create | attempts
   const [tests, setTests] = useState(null);
   const [editingTest, setEditingTest] = useState(null); // test object being edited, or null
+  const [attemptsTest, setAttemptsTest] = useState(null); // test object whose attempts we're viewing
 
   const refresh = useCallback(() => {
     api.get("/tests").then(({ data }) => setTests(data));
@@ -101,6 +104,10 @@ export default function TestsPanel() {
               setEditingTest(t);
               setView("create");
             }}
+            onViewAttempts={(t) => {
+              setAttemptsTest(t);
+              setView("attempts");
+            }}
           />
         </>
       )}
@@ -119,13 +126,17 @@ export default function TestsPanel() {
           onSaved={handleCreated}
         />
       )}
+
+      {view === "attempts" && (
+        <TestAttempts test={attemptsTest} onBack={() => setView("list")} />
+      )}
     </div>
   );
 }
 
 /* ---------------------------- Test list/table ---------------------------- */
 
-function TestList({ tests, onChanged, onEdit }) {
+function TestList({ tests, onChanged, onEdit, onViewAttempts }) {
   const [busyId, setBusyId] = useState(null);
 
   async function togglePublish(t) {
@@ -219,6 +230,13 @@ function TestList({ tests, onChanged, onEdit }) {
 
             <div className="flex items-center gap-1.5 ml-auto">
               <button
+                onClick={() => onViewAttempts(t)}
+                title="View attempts (who took it, scores)"
+                className="p-1.5 rounded-sm border border-black/15 hover:border-[var(--navy-950)]"
+              >
+                <Users size={14} />
+              </button>
+              <button
                 disabled={busyId === t._id}
                 onClick={() => togglePublish(t)}
                 title={t.status === "published" ? "Unpublish" : "Publish"}
@@ -257,9 +275,94 @@ function TestList({ tests, onChanged, onEdit }) {
   );
 }
 
+/* --------------------------- Attempts for a test -------------------------- */
+
+function TestAttempts({ test, onBack }) {
+  const [attempts, setAttempts] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!test) return;
+    api
+      .get(`/tests/${test._id}/attempts`)
+      .then(({ data }) => setAttempts(data))
+      .catch((err) => setError(err.response?.data?.message || "Could not load attempts."));
+  }, [test]);
+
+  if (!test) return null;
+
+  return (
+    <div className="bg-white border border-black/10 rounded-md p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <button onClick={onBack} className="p-1.5 rounded-sm hover:bg-black/5">
+            <ArrowLeft size={16} />
+          </button>
+          <div>
+            <h2 className="font-display text-lg text-[var(--navy-950)]">{test.title}</h2>
+            <p className="text-xs text-[var(--ink-soft)]">
+              {test.subject} · {test.chapter} — who has taken this test
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {error && <Banner ok={false}>{error}</Banner>}
+
+      {attempts === null && !error && (
+        <div className="space-y-2">
+          {[1, 2].map((i) => (
+            <div key={i} className="h-12 bg-black/5 rounded-md animate-pulse" />
+          ))}
+        </div>
+      )}
+
+      {attempts?.length === 0 && (
+        <p className="text-sm text-[var(--ink-soft)] bg-black/[0.02] border border-dashed border-black/15 rounded-sm p-6 text-center">
+          No student has taken this test yet.
+        </p>
+      )}
+
+      {attempts?.length > 0 && (
+        <div className="border border-black/10 rounded-sm overflow-hidden">
+          <div className="divide-y divide-black/10">
+            {attempts.map((a) => (
+              <div key={a._id} className="px-4 py-3 flex flex-wrap items-center gap-3 justify-between">
+                <div className="min-w-[160px]">
+                  <p className="font-semibold text-[var(--navy-950)] text-sm">
+                    {a.user?.name || "Deleted user"}
+                  </p>
+                  <p className="text-xs text-[var(--ink-soft)]">{a.user?.email}</p>
+                </div>
+                <p className="text-xs text-[var(--ink-soft)]">
+                  {new Date(a.createdAt).toLocaleString()}
+                </p>
+                <p className="text-sm font-mono">
+                  <span className="text-[var(--success)] font-semibold">{a.correctCount}</span>
+                  <span className="text-[var(--ink-soft)]"> correct · </span>
+                  <span className="text-[var(--danger)] font-semibold">{a.incorrectCount}</span>
+                  <span className="text-[var(--ink-soft)]"> wrong / {a.totalQuestions}</span>
+                </p>
+                <span
+                  className={`font-display text-lg font-semibold ml-auto ${
+                    a.scorePercent >= 60 ? "text-[var(--success)]" : "text-[var(--danger)]"
+                  }`}
+                >
+                  {a.scorePercent}%
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ------------------------------ PDF Import ------------------------------ */
 
 function PdfImportWizard({ onCancel, onImported }) {
+  const [testTitle, setTestTitle] = useState("");
   const [subject, setSubject] = useState("Biology");
   const [chapter, setChapter] = useState("");
   const [file, setFile] = useState(null);
@@ -289,7 +392,15 @@ function PdfImportWizard({ onCancel, onImported }) {
       const { data } = await api.post("/tests/import-pdf", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setPreview({ ...data, source: file.name });
+      // Always show at least 4 option fields (A, B, C, D) per question so the
+      // admin can fill in any missing ones and pick the correct answer, even
+      // if the PDF only had 2 options detected.
+      const questions = (data.questions || []).map((q) => {
+        const options = [...q.options];
+        while (options.length < 4) options.push("");
+        return { ...q, options };
+      });
+      setPreview({ ...data, questions, source: file.name });
     } catch (err) {
       setError(err.response?.data?.message || "Could not extract questions from this PDF.");
     } finally {
@@ -319,6 +430,31 @@ function PdfImportWizard({ onCancel, onImported }) {
     setPreview((p) => ({ ...p, questions: p.questions.filter((_, i) => i !== idx) }));
   }
 
+  function addOption(idx) {
+    setPreview((p) => {
+      const questions = [...p.questions];
+      const options = [...questions[idx].options];
+      if (options.length >= 5) return p; // model caps options at 5
+      options.push("");
+      questions[idx] = { ...questions[idx], options };
+      return { ...p, questions };
+    });
+  }
+
+  function removeOption(idx, optIdx) {
+    setPreview((p) => {
+      const questions = [...p.questions];
+      const q = questions[idx];
+      if (q.options.length <= 2) return p; // model requires at least 2 options
+      const options = q.options.filter((_, i) => i !== optIdx);
+      let correctIndex = q.correctIndex;
+      if (optIdx === correctIndex) correctIndex = -1;
+      else if (optIdx < correctIndex) correctIndex = correctIndex - 1;
+      questions[idx] = { ...q, options, correctIndex };
+      return { ...p, questions };
+    });
+  }
+
   async function handleImport() {
     setImporting(true);
     setImportMessage(null);
@@ -329,7 +465,49 @@ function PdfImportWizard({ onCancel, onImported }) {
         source: preview.source,
         questions: preview.questions,
       });
-      setImportMessage({ ok: true, text: `Imported ${data.imported} question(s) into the bank.` });
+
+      // Importing only adds questions to the shared bank -- it does NOT create
+      // a Test by itself. Auto-create a Test from exactly the questions we just
+      // imported (in "specific" mode) and publish + open it immediately, so the
+      // admin doesn't have to do a separate "Create test" step and the test
+      // shows up in the list (and to students) right away.
+      const questionIds = (data.questions || []).map((q) => q._id);
+      const finalTitle = testTitle.trim() || `${subject} - ${chapter}`;
+
+      if (questionIds.length > 0) {
+        try {
+          const { data: createdTest } = await api.post("/tests", {
+            title: finalTitle,
+            subject,
+            chapter,
+            selectionMode: "specific",
+            selectedQuestions: questionIds,
+            questionBank: questionIds,
+            source: preview.source,
+          });
+          await api.patch(`/tests/${createdTest._id}/publish`, { published: true });
+          await api.patch(`/tests/${createdTest._id}/open`);
+
+          setImportMessage({
+            ok: true,
+            text: `Imported ${data.imported} question(s) and created the test "${finalTitle}" — it's published and open now.`,
+          });
+        } catch (testErr) {
+          // Questions are safely in the bank even if the test step failed --
+          // tell the admin so they can finish it with "Create test" manually.
+          setImportMessage({
+            ok: false,
+            text: `Imported ${data.imported} question(s) into the bank, but could not auto-create the test (${
+              testErr.response?.data?.message || testErr.message
+            }). Use "Create test" to finish it using these questions.`,
+          });
+          setImporting(false);
+          return;
+        }
+      } else {
+        setImportMessage({ ok: true, text: `Imported ${data.imported} question(s) into the bank.` });
+      }
+
       setTimeout(() => onImported(), 900);
     } catch (err) {
       setImportMessage({ ok: false, text: err.response?.data?.message || "Import failed." });
@@ -349,6 +527,15 @@ function PdfImportWizard({ onCancel, onImported }) {
 
       {!preview && (
         <form onSubmit={handleExtract} className="space-y-4">
+          <Field label="Test title (students will see this name)">
+            <input
+              value={testTitle}
+              onChange={(e) => setTestTitle(e.target.value)}
+              className={inputClass}
+              placeholder="e.g. Biomolecules Mock Test"
+            />
+          </Field>
+
           <div className="grid grid-cols-2 gap-3">
             <Field label="Subject">
               <select value={subject} onChange={(e) => setSubject(e.target.value)} className={inputClass}>
@@ -450,11 +637,31 @@ function PdfImportWizard({ onCancel, onImported }) {
                       </span>
                       <input
                         value={opt}
+                        placeholder={`Option ${String.fromCharCode(65 + oIdx)}`}
                         onChange={(e) => updateOption(idx, oIdx, e.target.value)}
                         className={inputClass}
                       />
+                      {q.options.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => removeOption(idx, oIdx)}
+                          className="p-1 rounded-sm text-[var(--ink-soft)] hover:text-[var(--danger)] hover:bg-red-50 shrink-0"
+                          title="Remove option"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
                     </div>
                   ))}
+                  {q.options.length < 5 && (
+                    <button
+                      type="button"
+                      onClick={() => addOption(idx)}
+                      className="flex items-center gap-1 text-xs font-medium text-[var(--navy-800)] hover:text-[var(--gold-500)] pt-0.5"
+                    >
+                      <Plus size={12} /> Add option
+                    </button>
+                  )}
                 </div>
                 {q.correctIndex < 0 && (
                   <p className="text-xs text-[var(--danger)] pl-7">
