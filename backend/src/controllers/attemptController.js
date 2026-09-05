@@ -35,6 +35,13 @@ export async function submitAttempt(req, res) {
         return res.status(403).json({ message: "Test is currently closed." });
       }
 
+      // One attempt per test -- re-checked here too in case /start was
+      // bypassed and this endpoint was called directly.
+      const existingAttempt = await Attempt.findOne({ user: req.user._id, test: test._id });
+      if (existingAttempt) {
+        return res.status(403).json({ message: "You've already attempted this test." });
+      }
+
       const allowedIds = new Set(
         (test.selectionMode === "specific" ? test.selectedQuestions : test.questionBank).map((id) =>
           id.toString()
@@ -155,6 +162,7 @@ export async function getAttemptsForTest(req, res) {
 }
 
 // GET /api/attempts/:id - full review of one attempt (with correct answers + explanations).
+// GET /api/attempts/:id - full review of one attempt (with correct answers + explanations).
 // Students can only view their own attempts. Admins can view ANY student's
 // attempt (needed for the "who took this test and how did they do" views).
 export async function getAttemptDetail(req, res) {
@@ -173,5 +181,20 @@ export async function getAttemptDetail(req, res) {
     return res.json(attempt);
   } catch (err) {
     return res.status(500).json({ message: "Could not fetch attempt.", error: err.message });
+  }
+}
+
+// DELETE /api/attempts/:id (admin only)
+// Used when a student needs to retake a test that only allows one attempt --
+// the admin deletes their previous attempt, which frees them up to start again.
+export async function deleteAttempt(req, res) {
+  try {
+    const attempt = await Attempt.findByIdAndDelete(req.params.id);
+    if (!attempt) {
+      return res.status(404).json({ message: "Attempt not found." });
+    }
+    return res.json({ message: "Attempt deleted. The student can attempt the test again." });
+  } catch (err) {
+    return res.status(500).json({ message: "Could not delete attempt.", error: err.message });
   }
 }

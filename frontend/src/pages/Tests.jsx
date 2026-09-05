@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   ClipboardList,
   Lock,
@@ -9,6 +9,7 @@ import {
   Timer,
   PlayCircle,
   Loader2,
+  CheckCircle2,
 } from "lucide-react";
 import api from "../api/axios";
 import Navbar from "../components/Navbar";
@@ -119,7 +120,21 @@ export default function Tests() {
                 )}
               </div>
 
-              {t.isOpen ? (
+              {t.attempted ? (
+                <div className="mt-4">
+                  <Link
+                    to={`/result/${t.attemptId}`}
+                    className="inline-flex items-center gap-2 bg-black/5 text-[var(--navy-950)] font-semibold px-5 py-2.5 rounded-sm hover:bg-black/10"
+                  >
+                    <CheckCircle2 size={16} className="text-[var(--success)]" />
+                    View your result ({t.attemptScore}%)
+                  </Link>
+                  <p className="text-xs text-[var(--ink-soft)] mt-1.5">
+                    You've already attempted this test — only one attempt is allowed. Ask your
+                    admin if you need it reset.
+                  </p>
+                </div>
+              ) : t.isOpen ? (
                 <button
                   onClick={() => handleStart(t)}
                   disabled={startingId === t._id}

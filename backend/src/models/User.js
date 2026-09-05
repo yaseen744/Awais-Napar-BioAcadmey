@@ -36,6 +36,26 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // --- Login OTP gate ---
+    // Even with the right email/password, a student can only finish logging
+    // in with a one-time code that gets emailed to the admin(s), not to the
+    // student. This is how "sir" controls who's actually logging in even if
+    // credentials get shared.
+    otpCode: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    otpExpiresAt: {
+      type: Date,
+      default: null,
+      select: false,
+    },
+    otpAttempts: {
+      type: Number,
+      default: 0,
+      select: false,
+    },
   },
   { timestamps: true }
 );

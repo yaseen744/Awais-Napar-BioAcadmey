@@ -280,6 +280,7 @@ function TestList({ tests, onChanged, onEdit, onViewAttempts }) {
 function TestAttempts({ test, onBack }) {
   const [attempts, setAttempts] = useState(null);
   const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState(null);
 
   useEffect(() => {
     if (!test) return;
@@ -288,6 +289,24 @@ function TestAttempts({ test, onBack }) {
       .then(({ data }) => setAttempts(data))
       .catch((err) => setError(err.response?.data?.message || "Could not load attempts."));
   }, [test]);
+
+  async function handleReset(attempt) {
+    if (
+      !confirm(
+        `Delete ${attempt.user?.name || "this student"}'s attempt? This lets them take the test again (only one attempt is allowed at a time).`
+      )
+    )
+      return;
+    setBusyId(attempt._id);
+    try {
+      await api.delete(`/attempts/${attempt._id}`);
+      setAttempts((prev) => prev.filter((a) => a._id !== attempt._id));
+    } catch (err) {
+      alert(err.response?.data?.message || "Could not delete attempt.");
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   if (!test) return null;
 
@@ -324,7 +343,12 @@ function TestAttempts({ test, onBack }) {
       )}
 
       {attempts?.length > 0 && (
-        <div className="border border-black/10 rounded-sm overflow-hidden">
+        <>
+          <p className="text-xs text-[var(--ink-soft)]">
+            Each student gets one attempt. Delete an attempt below to let that student retake the
+            test.
+          </p>
+          <div className="border border-black/10 rounded-sm overflow-hidden">
           <div className="divide-y divide-black/10">
             {attempts.map((a) => (
               <div key={a._id} className="px-4 py-3 flex flex-wrap items-center gap-3 justify-between">
@@ -344,16 +368,25 @@ function TestAttempts({ test, onBack }) {
                   <span className="text-[var(--ink-soft)]"> wrong / {a.totalQuestions}</span>
                 </p>
                 <span
-                  className={`font-display text-lg font-semibold ml-auto ${
+                  className={`font-display text-lg font-semibold ${
                     a.scorePercent >= 60 ? "text-[var(--success)]" : "text-[var(--danger)]"
                   }`}
                 >
                   {a.scorePercent}%
                 </span>
+                <button
+                  disabled={busyId === a._id}
+                  onClick={() => handleReset(a)}
+                  title="Delete attempt (let student retake)"
+                  className="p-1.5 rounded-sm border border-[var(--danger)] text-[var(--danger)] hover:bg-red-50 disabled:opacity-50 ml-auto"
+                >
+                  <Trash2 size={14} />
+                </button>
               </div>
             ))}
           </div>
         </div>
+        </>
       )}
     </div>
   );

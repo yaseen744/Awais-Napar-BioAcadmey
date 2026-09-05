@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Test from "../models/Test.js";
 import Question from "../models/Question.js";
+import Attempt from "../models/Attempt.js";
 
 const SUBJECTS = ["Physics", "Chemistry", "Biology", "English", "Logical Reasoning"];
 
@@ -9,8 +10,11 @@ function isAdmin(req) {
 }
 
 // Strips a Test document down to what a student is allowed to see:
-// no question content, just the test's metadata + counts.
-function toStudentView(test) {
+// no question content, just the test's metadata + counts. `attemptedInfo` is
+// an optional { attemptId, scorePercent } for THIS student on THIS test --
+// each test only allows one attempt, so the frontend needs to know if
+// they've already used theirs.
+function toStudentView(test, attemptedInfo) {
   return {
     _id: test._id,
     title: test.title,
@@ -25,6 +29,9 @@ function toStudentView(test) {
     isOpen: test.isOpen,
     createdAt: test.createdAt,
     updatedAt: test.updatedAt,
+    attempted: Boolean(attemptedInfo),
+    attemptId: attemptedInfo?.attemptId || null,
+    attemptScore: attemptedInfo?.scorePercent ?? null,
   };
 }
 
@@ -32,12 +39,26 @@ function toStudentView(test) {
 // Students: ONLY published + currently open tests. As soon as the admin closes
 // a test it disappears from the student list entirely -- it does not stay
 // visible as "closed". It reappears automatically the moment it's reopened.
+// Each test also reports whether THIS student already used their one attempt.
 // Admins: everything, including drafts and closed tests (for management).
 export async function listTests(req, res) {
   try {
     const filter = isAdmin(req) ? {} : { status: "published", isOpen: true };
     const tests = await Test.find(filter).sort({ createdAt: -1 });
-    const payload = isAdmin(req) ? tests : tests.map(toStudentView);
+
+    if (isAdmin(req)) {
+      return res.json(tests);
+    }
+
+    const myAttempts = await Attempt.find({
+      user: req.user._id,
+      test: { $in: tests.map((t) => t._id) },
+    }).select("test scorePercent");
+    const attemptMap = new Map(
+      myAttempts.map((a) => [a.test.toString(), { attemptId: a._id, scorePercent: a.scorePercent }])
+    );
+
+    const payload = tests.map((t) => toStudentView(t, attemptMap.get(t._id.toString())));
     return res.json(payload);
   } catch (err) {
     return res.status(500).json({ message: "Could not fetch tests.", error: err.message });
@@ -54,7 +75,14 @@ export async function getTest(req, res) {
       return res.status(404).json({ message: "Test not found." });
     }
 
-    return res.json(isAdmin(req) ? test : toStudentView(test));
+    if (isAdmin(req)) return res.json(test);
+
+    const myAttempt = await Attempt.findOne({ user: req.user._id, test: test._id }).select(
+      "scorePercent"
+    );
+    return res.json(
+      toStudentView(test, myAttempt ? { attemptId: myAttempt._id, scorePercent: myAttempt.scorePercent } : null)
+    );
   } catch (err) {
     return res.status(500).json({ message: "Could not fetch test.", error: err.message });
   }
@@ -244,6 +272,20 @@ export async function startTest(req, res) {
     }
     if (!test.isOpen) {
       return res.status(403).json({ message: "Test is currently closed." });
+    }
+
+    // One attempt per test. If the student has already submitted an attempt
+    // for this test, they can't start a new one -- they need the admin to
+    // delete their previous attempt (Admin panel -> Tests -> View attempts)
+    // before they can try again.
+    const existingAttempt = await Attempt.findOne({ user: req.user._id, test: test._id });
+    if (existingAttempt) {
+      return res.status(403).json({
+        message:
+          "You've already attempted this test. Ask your admin to reset your attempt if you need to retake it.",
+        alreadyAttempted: true,
+        attemptId: existingAttempt._id,
+      });
     }
 
     let questionIds;

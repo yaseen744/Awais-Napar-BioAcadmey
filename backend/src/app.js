@@ -15,9 +15,24 @@ dotenv.config();
 
 const app = express();
 
+// In local development, Vite may pick a different port (5174, 5175, ...) if
+// the default 5173 is already in use by another running instance. Rather
+// than hard-locking CORS to one exact origin and silently breaking every
+// request when that happens, allow any localhost/127.0.0.1 port during dev,
+// plus whatever CLIENT_URL is explicitly set to (used in production).
+const isLocalOrigin = (origin) => /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: (origin, callback) => {
+      // Same-origin / non-browser requests (curl, server-to-server) send no origin header.
+      if (!origin) return callback(null, true);
+      if (origin === process.env.CLIENT_URL) return callback(null, true);
+      if (process.env.NODE_ENV !== "production" && isLocalOrigin(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error(`Not allowed by CORS: ${origin}`));
+    },
     credentials: true,
   })
 );

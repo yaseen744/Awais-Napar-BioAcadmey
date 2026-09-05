@@ -1,5 +1,13 @@
 import User from "../models/User.js";
 import { generateToken } from "../config/generateToken.js";
+import { sendLoginOtpEmail, isMailerConfigured } from "../config/mailer.js";
+
+const OTP_TTL_MINUTES = 10;
+const MAX_OTP_ATTEMPTS = 5;
+
+function generateOtp() {
+  return String(Math.floor(100000 + Math.random() * 900000)); // 6 digits, always
+}
 
 export async function registerUser(req, res) {
   try {
@@ -39,7 +47,9 @@ export async function loginUser(req, res) {
       return res.status(400).json({ message: "Email and password are required." });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() }).select("+password");
+    const user = await User.findOne({ email: email.toLowerCase() }).select(
+      "+password +otpCode +otpExpiresAt +otpAttempts"
+    );
     if (!user) {
       return res.status(401).json({ message: "Invalid email or password." });
     }
@@ -56,12 +66,109 @@ export async function loginUser(req, res) {
       });
     }
 
+    // Admins log straight in -- the OTP gate exists to stop STUDENTS sharing
+    // credentials with each other; it would be pointless for the admin to
+    // have to email a code to themselves every time.
+    if (user.role === "admin") {
+      return res.json({
+        token: generateToken(user._id),
+        user: { id: user._id, name: user.name, email: user.email, role: user.role },
+      });
+    }
+
+    // --- Student login OTP gate ---
+    // Correct email/password only gets a student to here. The actual code
+    // needed to finish logging in is emailed to the admin(s), not the
+    // student -- so credentials alone (e.g. shared with a friend) aren't
+    // enough to get in without the admin handing over the code in person.
+    if (!isMailerConfigured()) {
+      return res.status(500).json({
+        message:
+          "Login codes are not configured on the server yet. Ask your admin to set up SMTP_EMAIL / SMTP_APP_PASSWORD.",
+      });
+    }
+
+    const admins = await User.find({ role: "admin" }).select("email");
+    if (admins.length === 0) {
+      return res.status(500).json({ message: "No admin account exists to send the login code to." });
+    }
+
+    const otp = generateOtp();
+    user.otpCode = otp;
+    user.otpExpiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000);
+    user.otpAttempts = 0;
+    await user.save({ validateBeforeSave: false });
+
+    try {
+      await sendLoginOtpEmail({
+        toEmails: admins.map((a) => a.email),
+        otp,
+        studentName: user.name,
+        studentEmail: user.email,
+      });
+    } catch (mailErr) {
+      return res.status(502).json({ message: "Could not send the login code. Try again shortly." });
+    }
+
+    return res.json({
+      otpRequired: true,
+      userId: user._id,
+      message: "A login code was sent to your admin. Ask them for it to finish logging in.",
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Login failed.", error: err.message });
+  }
+}
+
+// POST /api/auth/verify-otp  { userId, otp }
+// Second step of student login -- exchanges the admin-relayed code for the
+// actual session token.
+export async function verifyLoginOtp(req, res) {
+  try {
+    const { userId, otp } = req.body;
+    if (!userId || !otp) {
+      return res.status(400).json({ message: "userId and otp are required." });
+    }
+
+    const user = await User.findById(userId).select("+otpCode +otpExpiresAt +otpAttempts");
+    if (!user || !user.otpCode) {
+      return res.status(400).json({ message: "No pending login. Please log in again." });
+    }
+
+    if (user.otpExpiresAt < new Date()) {
+      user.otpCode = null;
+      user.otpExpiresAt = null;
+      user.otpAttempts = 0;
+      await user.save({ validateBeforeSave: false });
+      return res.status(400).json({ message: "This code has expired. Please log in again." });
+    }
+
+    if (user.otpAttempts >= MAX_OTP_ATTEMPTS) {
+      user.otpCode = null;
+      user.otpExpiresAt = null;
+      user.otpAttempts = 0;
+      await user.save({ validateBeforeSave: false });
+      return res.status(429).json({ message: "Too many wrong attempts. Please log in again." });
+    }
+
+    if (String(otp).trim() !== user.otpCode) {
+      user.otpAttempts += 1;
+      await user.save({ validateBeforeSave: false });
+      return res.status(401).json({ message: "Incorrect code. Please try again." });
+    }
+
+    // Success -- clear the OTP so it can't be reused, then issue the real session.
+    user.otpCode = null;
+    user.otpExpiresAt = null;
+    user.otpAttempts = 0;
+    await user.save({ validateBeforeSave: false });
+
     return res.json({
       token: generateToken(user._id),
       user: { id: user._id, name: user.name, email: user.email, role: user.role },
     });
   } catch (err) {
-    return res.status(500).json({ message: "Login failed.", error: err.message });
+    return res.status(500).json({ message: "Could not verify code.", error: err.message });
   }
 }
 

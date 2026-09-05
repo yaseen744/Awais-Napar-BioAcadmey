@@ -38,6 +38,10 @@ export default function TestPage() {
   const [selected, setSelected] = useState({});
   const [seconds, setSeconds] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  // Sequential progress: a student can revisit any question up to the
+  // furthest one they've unlocked, but can't jump ahead into questions they
+  // haven't reached yet -- "Next" only unlocks once the current one is answered.
+  const [furthestReached, setFurthestReached] = useState(0);
 
   // --- Anti-cheating guard state ---
   // The exam only actually starts once the student enters fullscreen. From
@@ -126,8 +130,17 @@ export default function TestPage() {
   }
 
   function goTo(idx) {
+    if (idx > furthestReached) return; // can't skip ahead into unanswered territory
     setDirection(idx > current ? 1 : -1);
     setCurrent(idx);
+  }
+
+  function goNext() {
+    if (selected[q._id] === undefined) return; // must answer this one first
+    const next = Math.min(current + 1, questions.length - 1);
+    setFurthestReached((f) => Math.max(f, next));
+    setDirection(1);
+    setCurrent(next);
   }
 
   function formatTime(s) {
@@ -300,14 +313,19 @@ export default function TestPage() {
             <ChevronLeft size={16} /> Previous
           </button>
 
-          <span className="text-xs text-[var(--ink-soft)]">{answeredCount} answered</span>
+          <span className="text-xs text-[var(--ink-soft)]">
+            {selected[q._id] === undefined && current < questions.length - 1
+              ? "Select an answer to continue"
+              : `${answeredCount} answered`}
+          </span>
 
           {current < questions.length - 1 ? (
             <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => goTo(current + 1)}
-              className="flex items-center gap-1 px-5 py-2 text-sm font-semibold bg-[var(--navy-950)] text-[var(--paper)] rounded-sm hover:bg-[var(--navy-800)]"
+              whileHover={selected[q._id] !== undefined ? { scale: 1.03 } : {}}
+              whileTap={selected[q._id] !== undefined ? { scale: 0.97 } : {}}
+              onClick={goNext}
+              disabled={selected[q._id] === undefined}
+              className="flex items-center gap-1 px-5 py-2 text-sm font-semibold bg-[var(--navy-950)] text-[var(--paper)] rounded-sm hover:bg-[var(--navy-800)] disabled:opacity-30 disabled:cursor-not-allowed"
             >
               Next <ChevronRight size={16} />
             </motion.button>
@@ -328,13 +346,18 @@ export default function TestPage() {
         <div className="mt-8 flex flex-wrap gap-1.5">
           {questions.map((qq, idx) => {
             const answered = selected[qq._id] !== undefined;
+            const locked = idx > furthestReached;
             return (
               <button
                 key={qq._id}
                 onClick={() => goTo(idx)}
+                disabled={locked}
+                title={locked ? "Answer the current question to unlock this one" : undefined}
                 className={`w-8 h-8 text-xs rounded-sm font-mono border transition-all ${
                   idx === current
                     ? "border-[var(--gold-500)] bg-[var(--gold-500)]/20 scale-110"
+                    : locked
+                    ? "border-black/10 text-black/25 cursor-not-allowed"
                     : answered
                     ? "border-[var(--navy-950)]/30 bg-[var(--navy-950)]/5"
                     : "border-black/15"
