@@ -22,32 +22,16 @@ const app = express();
 // plus whatever CLIENT_URL is explicitly set to (used in production).
 const isLocalOrigin = (origin) => /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
 
-// Trailing slashes are a common copy-paste mistake when setting CLIENT_URL on
-// Vercel -- normalize both sides so "https://x.com" and "https://x.com/" are
-// treated as the same origin instead of silently failing CORS.
-const normalizeOrigin = (url) => (url || "").trim().replace(/\/+$/, "");
-// CLIENT_URL can be a single URL or a comma-separated list (e.g. a
-// production domain plus a Vercel preview URL) for a bit of flexibility.
-const allowedOrigins = (process.env.CLIENT_URL || "")
-  .split(",")
-  .map(normalizeOrigin)
-  .filter(Boolean);
-
 app.use(
   cors({
     origin: (origin, callback) => {
       // Same-origin / non-browser requests (curl, server-to-server) send no origin header.
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(normalizeOrigin(origin))) return callback(null, true);
+      if (origin === process.env.CLIENT_URL) return callback(null, true);
       if (process.env.NODE_ENV !== "production" && isLocalOrigin(origin)) {
         return callback(null, true);
       }
-      // Deny without throwing -- an Error here would 500 the whole request
-      // (including the preflight OPTIONS), which just hides the real CORS
-      // rejection behind a confusing "Internal Server Error". Cleanly
-      // declining just omits the CORS headers, which is what should happen.
-      console.warn(`CORS: rejected origin "${origin}" (allowed: ${allowedOrigins.join(", ") || "none set"})`);
-      return callback(null, false);
+      return callback(new Error(`Not allowed by CORS: ${origin}`));
     },
     credentials: true,
   })
