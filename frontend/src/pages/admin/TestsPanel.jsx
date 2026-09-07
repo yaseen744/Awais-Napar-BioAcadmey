@@ -95,6 +95,12 @@ export default function TestsPanel() {
             >
               <Plus size={15} /> Create test
             </button>
+            <button
+              onClick={() => setView("bank")}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-sm text-sm font-semibold border border-black/15 hover:border-[var(--navy-950)]"
+            >
+              <ListChecks size={15} /> Question bank
+            </button>
           </div>
 
           <TestList
@@ -130,6 +136,8 @@ export default function TestsPanel() {
       {view === "attempts" && (
         <TestAttempts test={attemptsTest} onBack={() => setView("list")} />
       )}
+
+      {view === "bank" && <QuestionBankPanel onBack={() => setView("list")} />}
     </div>
   );
 }
@@ -388,6 +396,220 @@ function TestAttempts({ test, onBack }) {
         </div>
         </>
       )}
+    </div>
+  );
+}
+
+/* ------------------------------ Question Bank (edit already-imported Qs) ------------------------------ */
+
+function QuestionBankPanel({ onBack }) {
+  const [subject, setSubject] = useState("Biology");
+  const [chapter, setChapter] = useState("");
+  const [questions, setQuestions] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
+
+  const refresh = useCallback(() => {
+    const params = { subject };
+    if (chapter.trim()) params.chapter = chapter.trim();
+    api.get("/questions/all", { params }).then(({ data }) => setQuestions(data));
+  }, [subject, chapter]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  function handleSaved(updated) {
+    setQuestions((prev) => prev.map((q) => (q._id === updated._id ? updated : q)));
+    setExpandedId(null);
+  }
+
+  function handleDeleted(id) {
+    setQuestions((prev) => prev.filter((q) => q._id !== id));
+    setExpandedId(null);
+  }
+
+  return (
+    <div className="bg-white border border-black/10 rounded-md p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <button onClick={onBack} className="p-1.5 rounded-sm hover:bg-black/5">
+            <ArrowLeft size={16} />
+          </button>
+          <h2 className="font-display text-lg text-[var(--navy-950)]">Question bank</h2>
+        </div>
+      </div>
+
+      <p className="text-xs text-[var(--ink-soft)]">
+        Fix mistakes in already-imported questions -- wrong correct answer, typo in the text or
+        options, etc. Changes apply immediately to every test that uses this question.
+      </p>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Subject">
+          <select value={subject} onChange={(e) => setSubject(e.target.value)} className={inputClass}>
+            {SUBJECTS.map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Chapter (blank = all)">
+          <input
+            value={chapter}
+            onChange={(e) => setChapter(e.target.value)}
+            className={inputClass}
+            placeholder="e.g. Biomolecules"
+          />
+        </Field>
+      </div>
+
+      {questions === null && (
+        <div className="space-y-2">
+          {[1, 2].map((i) => (
+            <div key={i} className="h-12 bg-black/5 rounded-md animate-pulse" />
+          ))}
+        </div>
+      )}
+
+      {questions?.length === 0 && (
+        <p className="text-sm text-[var(--ink-soft)] bg-black/[0.02] border border-dashed border-black/15 rounded-sm p-6 text-center">
+          No questions found for this subject/chapter.
+        </p>
+      )}
+
+      <div className="space-y-2 max-h-[560px] overflow-y-auto pr-1">
+        {questions?.map((q, idx) =>
+          expandedId === q._id ? (
+            <QuestionEditRow
+              key={q._id}
+              question={q}
+              index={idx}
+              onCancel={() => setExpandedId(null)}
+              onSaved={handleSaved}
+              onDeleted={handleDeleted}
+            />
+          ) : (
+            <button
+              key={q._id}
+              onClick={() => setExpandedId(q._id)}
+              className="w-full text-left border border-black/10 rounded-sm p-3 hover:border-[var(--gold-500)] flex items-start gap-2"
+            >
+              <span className="text-xs font-mono text-[var(--ink-soft)] pt-0.5">{idx + 1}.</span>
+              <span className="text-sm text-[var(--ink)] flex-1">{q.text}</span>
+              <Pencil size={14} className="text-[var(--ink-soft)] shrink-0 mt-0.5" />
+            </button>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
+function QuestionEditRow({ question, index, onCancel, onSaved, onDeleted }) {
+  const [text, setText] = useState(question.text);
+  const [options, setOptions] = useState(question.options);
+  const [correctIndex, setCorrectIndex] = useState(question.correctIndex);
+  const [explanation, setExplanation] = useState(question.explanation || "");
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+
+  function updateOption(idx, value) {
+    setOptions((prev) => prev.map((o, i) => (i === idx ? value : o)));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setError("");
+    try {
+      const { data } = await api.patch(`/questions/${question._id}`, {
+        text,
+        options,
+        correctIndex,
+        explanation,
+      });
+      onSaved(data);
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not save changes.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirm("Delete this question from the bank? Tests that already use it keep working.")) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/questions/${question._id}`);
+      onDeleted(question._id);
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not delete question.");
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="border border-[var(--gold-500)] rounded-sm p-4 space-y-2 bg-[var(--gold-500)]/[0.03]">
+      <div className="flex items-start gap-2">
+        <span className="text-xs font-mono text-[var(--ink-soft)] pt-2">{index + 1}.</span>
+        <textarea
+          rows={2}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          className={`${inputClass} flex-1`}
+        />
+      </div>
+      <div className="space-y-1.5 pl-7">
+        {options.map((opt, oIdx) => (
+          <div key={oIdx} className="flex items-center gap-2">
+            <input
+              type="radio"
+              name={`edit-correct-${question._id}`}
+              checked={Number(correctIndex) === oIdx}
+              onChange={() => setCorrectIndex(oIdx)}
+            />
+            <span className="text-xs font-mono w-4 text-[var(--ink-soft)]">
+              {String.fromCharCode(65 + oIdx)}
+            </span>
+            <input value={opt} onChange={(e) => updateOption(oIdx, e.target.value)} className={inputClass} />
+          </div>
+        ))}
+      </div>
+      <div className="pl-7">
+        <Field label="Explanation (optional)">
+          <input
+            value={explanation}
+            onChange={(e) => setExplanation(e.target.value)}
+            className={inputClass}
+          />
+        </Field>
+      </div>
+
+      {error && <Banner ok={false}>{error}</Banner>}
+
+      <div className="flex gap-2 pl-7">
+        <button
+          onClick={onCancel}
+          className="px-3 py-1.5 text-sm font-semibold border border-black/15 rounded-sm hover:border-[var(--navy-950)]"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-[var(--navy-950)] text-[var(--paper)] rounded-sm hover:bg-[var(--navy-800)] disabled:opacity-60"
+        >
+          <CheckCircle2 size={14} />
+          {saving ? "Saving..." : "Save changes"}
+        </button>
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-[var(--danger)] border border-[var(--danger)] rounded-sm hover:bg-red-50 disabled:opacity-60 ml-auto"
+        >
+          <Trash2 size={14} />
+          {deleting ? "Deleting..." : "Delete"}
+        </button>
+      </div>
     </div>
   );
 }

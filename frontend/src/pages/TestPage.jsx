@@ -60,7 +60,7 @@ export default function TestPage() {
 
   useEffect(() => {
     if (!questions.length) {
-      navigate("/tests", { replace: true });
+      navigate("/test/new", { replace: true });
     }
   }, [questions, navigate]);
 

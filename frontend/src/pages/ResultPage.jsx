@@ -154,7 +154,7 @@ export default function ResultPage() {
             <div className="flex gap-3 mt-8">
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="flex-1">
                 <Link
-                  to="/tests"
+                  to="/test/new"
                   className="flex items-center justify-center gap-2 bg-[var(--navy-950)] text-[var(--paper)] font-semibold py-3 rounded-sm hover:bg-[var(--navy-800)]"
                 >
                   <RotateCcw size={16} /> Take another test

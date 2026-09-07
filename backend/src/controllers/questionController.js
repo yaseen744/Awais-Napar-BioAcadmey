@@ -60,6 +60,61 @@ export async function getAllQuestions(req, res) {
   }
 }
 
+// PATCH /api/questions/:id (admin only) -- fix a mistake in an already-imported
+// question (wrong correct answer, typo in text/options, etc). This is what
+// lets the admin correct answer-key mistakes after import/test creation,
+// without having to re-import the whole PDF.
+export async function updateQuestion(req, res) {
+  try {
+    const { text, options, correctIndex, explanation, subject, chapter } = req.body;
+
+    const question = await Question.findById(req.params.id);
+    if (!question) {
+      return res.status(404).json({ message: "Question not found." });
+    }
+
+    if (text !== undefined) question.text = text.trim();
+    if (Array.isArray(options)) {
+      const cleaned = options.map((o) => (o || "").trim()).filter(Boolean);
+      if (cleaned.length < 2) {
+        return res.status(400).json({ message: "A question needs at least 2 options." });
+      }
+      question.options = cleaned;
+    }
+    if (correctIndex !== undefined) {
+      const idx = Number(correctIndex);
+      if (!Number.isInteger(idx) || idx < 0 || idx >= question.options.length) {
+        return res.status(400).json({ message: "correctIndex must point to a valid option." });
+      }
+      question.correctIndex = idx;
+    }
+    if (explanation !== undefined) question.explanation = explanation;
+    if (subject !== undefined) question.subject = subject;
+    if (chapter !== undefined) question.chapter = chapter.trim();
+
+    await question.save();
+    return res.json(question);
+  } catch (err) {
+    return res.status(500).json({ message: "Could not update question.", error: err.message });
+  }
+}
+
+// DELETE /api/questions/:id (admin only)
+// Note: this only removes the question from the shared bank going forward.
+// Any Test that already has this question's id baked into its questionBank
+// keeps the reference; startTest quietly skips ids that no longer resolve.
+export async function deleteQuestion(req, res) {
+  try {
+    const question = await Question.findByIdAndDelete(req.params.id);
+    if (!question) {
+      return res.status(404).json({ message: "Question not found." });
+    }
+    return res.json({ message: "Question deleted." });
+  } catch (err) {
+    return res.status(500).json({ message: "Could not delete question.", error: err.message });
+  }
+}
+
 // POST /api/questions (admin only) - add a single question to the bank
 export async function addQuestion(req, res) {
   try {
