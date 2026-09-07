@@ -76,8 +76,7 @@ export default function Tests() {
 
         {tests?.length === 0 && (
           <div className="bg-white border border-dashed border-black/15 rounded-md p-8 text-center text-[var(--ink-soft)]">
-            No tests have been published yet. Check back soon, or try the "New Test" mixed-quiz
-            builder instead.
+            No tests have been published yet. Check back soon.
           </div>
         )}
 
