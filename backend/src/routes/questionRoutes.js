@@ -7,8 +7,8 @@ const router = express.Router();
 
 router.use(protect); // nobody gets past this without a valid login
 
-router.get("/", getQuestions);
-router.get("/meta", getMeta);
+router.get("/", adminOnly, getQuestions);
+router.get("/meta", adminOnly, getMeta);
 router.get("/all", adminOnly, getAllQuestions);
 router.post("/", adminOnly, addQuestion);
 router.post("/import", adminOnly, importQuestions);

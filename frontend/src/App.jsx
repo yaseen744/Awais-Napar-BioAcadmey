@@ -6,7 +6,6 @@ import AdminRoute from "./components/AdminRoute";
 import Register from "./pages/Register";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
-import TestSetup from "./pages/TestSetup";
 import TestPage from "./pages/TestPage";
 import Tests from "./pages/Tests";
 import ResultPage from "./pages/ResultPage";
@@ -34,14 +33,6 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Dashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/test/new"
-          element={
-            <ProtectedRoute>
-              <TestSetup />
             </ProtectedRoute>
           }
         />

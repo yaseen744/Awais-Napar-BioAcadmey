@@ -2,7 +2,6 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   LayoutDashboard,
-  FilePlus2,
   ClipboardList,
   PlayCircle,
   BookOpen,
@@ -16,7 +15,6 @@ import { useAuth } from "../context/AuthContext";
 const LINKS = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/tests", label: "Tests", icon: ClipboardList },
-  { to: "/test/new", label: "New Test", icon: FilePlus2 },
   { to: "/videos", label: "Videos", icon: PlayCircle },
   { to: "/notes", label: "Notes", icon: BookOpen },
   { to: "/leaderboard", label: "Leaderboard", icon: Trophy },

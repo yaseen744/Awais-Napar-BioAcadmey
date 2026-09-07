@@ -57,7 +57,7 @@ export default function Tests() {
           <ClipboardList size={26} className="text-[var(--gold-500)]" /> Tests
         </h1>
         <p className="text-[var(--ink-soft)] mb-6">
-          Instructor-configured tests. Closed tests are still viewable but can't be started.
+          Instructor-configured tests. Only currently open, published tests appear here.
         </p>
 
         {error && (
@@ -76,8 +76,7 @@ export default function Tests() {
 
         {tests?.length === 0 && (
           <div className="bg-white border border-dashed border-black/15 rounded-md p-8 text-center text-[var(--ink-soft)]">
-            No tests have been published yet. Check back soon, or try the "New Test" mixed-quiz
-            builder instead.
+            No tests have been published yet. Check back soon.
           </div>
         )}
 
